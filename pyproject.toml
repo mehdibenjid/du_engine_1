@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "du_analysis"
+version = "0.1.0"
+description = "Hybrid Information Retrieval Pipeline for User Request documents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Private/Internal"}
+authors = [
+    {name = "Mehdi Benjid", email = "mehdi.m.benjid.external@airbus.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+# ------------------------------------------------------------------
+# DEPENDENCIES
+# extracted from your imports (pandas, numpy, requests, faiss, etc.)
+# ------------------------------------------------------------------
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "requests>=2.31.0",
+    "urllib3>=2.0.0",
+    "tqdm>=4.66.0",
+    "rank_bm25>=0.2.2",             # For Lexical Search
+    "faiss-cpu>=1.7.4",             # For Vector Search (Use faiss-gpu if you have CUDA)
+    "pyarrow>=14.0.0",              # Required for .to_parquet() support
+    "matplotlib>=3.7.0",            # Added for plotting
+    "seaborn>=0.13.0",              # Added for statistical visualization
+    "lingua-language-detector",     # Added for language detection
+    "PyJWT>=2.4.0",
+    "streamlit",
+    "plotly",
+    "umap-learn",
+    "hdbscan",
+    "pytest"
+
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.10",
+    "black",
+    "isort",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+# ------------------------------------------------------------------
+# PACKAGE DISCOVERY
+# This replaces: packages=find_packages(where="src"), package_dir={"": "src"}
+# ------------------------------------------------------------------
+# config.py lives directly under src/ — expose it as a top-level module
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["engine*", "helpers*", "pipeline*", "config*"]
+namespaces = false
+
+# config.py is a single-file module at src/config.py; tell setuptools about it
+[tool.setuptools.package-dir]
+"" = "src"
+
+# ------------------------------------------------------------------
+# CLI entry point
+[project.scripts]
+du-engine = "main:main"
+
+# ------------------------------------------------------------------
+# Dev / test config
