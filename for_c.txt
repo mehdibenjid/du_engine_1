@@ -1,0 +1,79 @@
+
+#######################
+small dataset : k must be less than or equal to the number of training points
+- add a filter on time : year, month, from, to 
+
+- when token is missing exception should be captured  to avoid the error and the code runs succesfully : 
+2026-04-17 12:02:51 | helpers.auth | INFO | Token missing or expiring soon — refreshing.
+2026-04-17 12:02:51 | helpers.auth | ERROR | Certificate files missing. Expected cert=C:\Users\MBEN8VQE\Desktop\DU_Engine\src/helpers/cert.pem  key=C:\Users\MBEN8VQE\Desktop\DU_Engine\src/helpers/private.key
+Traceback (most recent call last):
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\main.py", line 172, in <module>
+    main()
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\main.py", line 130, in main
+    run_train(cfg, input_path=args.path, match_code=args.match_code)
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\pipeline\runner.py", line 133, in run_train
+    df_emb = run_generate_embeddings(cfg, df=df_ready, artifacts_dir=version_dir)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\pipeline\steps\step4_embeddings.py", line 133, in run_generate_embeddings
+    raise RuntimeError(
+RuntimeError: Failed to obtain a valid authentication tokepython ./src/main.py train --path data/raw/v2/sample_train.csv --match_codenalysis_env) PS C:\Users\MBEN8VQE\Desktop\DU_Engine> 
+2026-04-17 12:03:25 | __main__ | INFO | Config loaded | mode=train
+
+- try separator ; then , if fail to prevent the following error : 
+Traceback (most recent call last):
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\main.py", line 172, in <module>
+    main()
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\main.py", line 158, in main
+    run_infer(
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\pipeline\runner.py", line 259, in run_infer
+    run_retrieval(cfg, incoming_path=incoming_path, artifacts_dir=artifacts_dir, **retrieval_kwargs)
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\pipeline\steps\step6_retrieval.py", line 113, in run_retrieval
+    df_in = engine.prepare_incoming(df_raw, match_code=match_code)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\MBEN8VQE\Desktop\DU_Engine\src\engine\du_engine.py", line 605, in prepare_incoming
+    raise ValueError(f"Incoming CSV missing {c}. Found: {list(df.columns)}")
+ValueError: Incoming CSV missing REFERENCE. Found: ['REFERENCE,ISSUE,TITLE,...']
+
+
+##########################
+To ensure Claude Code provides a high-quality analysis and refactoring plan for your **DU Engine**, you need a prompt that focuses on the "Versioned Lifecycle" of your clusters. 
+
+The main technical risk in your current code is **Cluster ID drift**: because Step 9 re-runs HDBSCAN from scratch during a `retrain`, "Cluster 1" in version 1 will likely not be the same as "Cluster 1" in version 2.
+
+Copy and paste the following prompt into Claude:
+
+***
+
+# Prompt for Claude Code: Audit of DU Engine Clustering Consistency
+
+### 1. Context & Objective
+I am developing the **DU Engine**, a system that indexes technical documents using hybrid search (FAISS + BM25) and clusters the corpus to create "class anchors" (medoids). 
+**The Problem:** I am concerned about the consistency of clusters between the `train` (full build) and `retrain` (incremental merge) modes. Specifically, if I add 10% new data, I need to know if the previously discovered "classes" remain stable or if the system essentially "re-shuffles" all IDs and medoids every time.
+
+### 2. Files to Analyze
+Please analyze the logic across these specific files:
+- `src/pipeline/runner.py`: The orchestration of `run_train` vs `run_retrain`.
+- `src/pipeline/steps/step5_indexes.py`: How new vectors are merged with old ones.
+- `src/pipeline/steps/step9_global_clustering.py`: The UMAP + HDBSCAN logic for the full corpus.
+- `src/pipeline/steps/step10_classify.py`: How incoming queries are mapped back to these clusters.
+- `src/helpers/clustering.py`: The underlying math for medoid selection and MMR.
+
+### 3. Analysis Task
+Audit the code for the following "Consistency" leaks:
+1.  **Stochastic Stability:** Does UMAP use a fixed `random_state` consistently through the `Config` object?
+2.  **Cluster ID Drift:** In `run_retrain`, Step 9 re-clusters the entire merged corpus. Does this cause previous cluster labels to vanish? How does this affect `step10_classify`?
+3.  **High-Dim vs. Low-Dim Medoids:** Step 9 computes medoids in the original high-dimensional space ($1024D$) but clusters in the UMAP space. Is this the most robust approach for "class anchors"?
+4.  **L2 Normalization:** Ensure that vectors are normalized identically during training, merging, and inference to prevent cosine similarity skew.
+
+### 4. Required Plan of Execution
+Before refactoring, generate a plan to:
+1.  **Create a Stability Test:** A script that runs `train` on Dataset A, then `retrain` with a small addition (Dataset B). It should measure how many medoids from `v1` remain valid/proximal in `v2`.
+2.  **Refactoring Strategy:** Propose a way to make clusters "sticky" across versions. (e.g., Should we map new medoids to the nearest old medoids to preserve IDs?)
+3.  **Config Audit:** Identify any hardcoded parameters in `du_engine.py` vs `config.py` that might cause environment-based inconsistencies.
+
+### 5. Expected Output
+1.  A summary of "Consistency Risks" found in the current code.
+2.  A python test script to quantify cluster drift.
+3.  A refactoring proposal for `step9_global_clustering.py` to ensure version-to-version stability.
+
+***
